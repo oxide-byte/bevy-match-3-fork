@@ -15,11 +15,12 @@ use bevy::{
     ui::auto_directional_navigation::{AutoDirectionalNavigation, AutoDirectionalNavigator},
     ui_widgets::{Activate, Button},
 };
-
+use bevy::tasks::IoTaskPool;
+use bevy::text::FontSourceTemplate;
 use crate::GameState;
 use crate::GameSystems;
 use crate::ScreenState;
-use crate::game_logic::Score;
+use crate::game_logic::{HighScore, Score};
 
 pub struct MenuPlugin;
 
@@ -28,7 +29,10 @@ impl Plugin for MenuPlugin {
         app.add_plugins(DirectionalNavigationPlugin)
             .insert_resource(InputFocusVisible(true))
             .add_systems(OnEnter(ScreenState::MainMenu), setup_menu)
-            .add_systems(OnEnter(GameState::GameOver), setup_game_over_screen)
+            .add_systems(OnEnter(GameState::GameOver), (
+                setup_game_over_screen,
+                save_high_score
+            ))
             .add_systems(
                 Update,
                 (navigate_menu_with_arrows, update_menu_focus_indicator).in_set(GameSystems::Logic),
@@ -111,7 +115,10 @@ fn setup_menu(mut commands: Commands) {
         Children [
             (
                 Text("Bevy Match-3")
-                TextFont { font_size: px(TITLE_FONT_SIZE) }
+                TextFont {
+                font_size: px(TITLE_FONT_SIZE),
+                font: FontSourceTemplate::Handle("fonts/Lacquer-Regular.ttf"),
+                }
                 TextColor(Color::WHITE)
             ),
             (
@@ -166,6 +173,26 @@ fn setup_game_over_screen(mut commands: Commands, score: Res<Score>) {
             ),
         ]
     });
+}
+
+fn save_high_score(
+    score: Res<Score>,
+    mut high_score: ResMut<HighScore>,
+) {
+    if score.value <= high_score.0 {
+        return;
+    }
+    high_score.0 = score.value;
+
+    // Move a copy into the task; the system itself returns immediately.
+    let to_write = score.value;
+    IoTaskPool::get()
+        .spawn(async move {
+            if let Err(e) = std::fs::write("highscore.txt", to_write.to_string()) {
+                warn!("failed to save high score: {e}");
+            }
+        })
+        .detach();
 }
 
 fn navigate_menu_with_arrows(

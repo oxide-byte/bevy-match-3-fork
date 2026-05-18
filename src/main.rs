@@ -45,6 +45,7 @@
 //! [`BoardCursor`]: cursor::BoardCursor
 //! [`SwapMessage`]: selection::SwapMessage
 
+use crate::game_logic::HighScore;
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 
@@ -59,6 +60,11 @@ mod menu;
 mod selection;
 
 fn main() {
+    let initial = std::fs::read_to_string("highscore.txt")
+        .ok()
+        .and_then(|s| s.trim().parse::<u32>().ok())
+        .unwrap_or(0);
+
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
@@ -68,6 +74,7 @@ fn main() {
             }),
             ..default()
         }))
+        .insert_resource(HighScore(initial))
         .init_state::<ScreenState>()
         .add_sub_state::<GameState>()
         // Systems are organised into three ordered sets so that input is read,

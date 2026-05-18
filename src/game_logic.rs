@@ -28,7 +28,7 @@ use crate::GameSystems;
 use crate::ScreenState;
 use crate::audio::SoundEffect;
 use crate::board::{GEM_STEP, GRID_COLS, GRID_ROWS, Grid, GridPos};
-use crate::gems::{Falling, GemType};
+use crate::gems::{Falling, GemType, Wiggling};
 use crate::selection::SwapMessage;
 use bevy::prelude::*;
 use std::fmt;
@@ -40,8 +40,13 @@ pub struct GameLogicPlugin;
 
 impl Plugin for GameLogicPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Score>()
+        app
+            .init_resource::<Score>()
+            .init_resource::<MoveCount>()
+            .init_resource::<LifeCount>()
             .add_systems(OnEnter(ScreenState::InGame), reset_score)
+            .add_systems(OnEnter(ScreenState::InGame), reset_move)
+            .add_systems(OnEnter(ScreenState::InGame), reset_life)
             .add_systems(
                 Update,
                 (
@@ -66,8 +71,41 @@ impl fmt::Display for Score {
     }
 }
 
+#[derive(Resource, Default, Debug)]
+pub struct MoveCount {
+    pub value: u32,
+}
+
+impl fmt::Display for MoveCount {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Moves: {}", self.value)
+    }
+}
+
+#[derive(Resource, Default, Debug)]
+pub struct LifeCount {
+    pub value: u32,
+}
+
+impl fmt::Display for LifeCount {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Health: {}", self.value)
+    }
+}
+
+#[derive(Resource, Default, Debug)]
+pub struct HighScore(pub u32);
+
 fn reset_score(mut score: ResMut<Score>) {
     score.value = 0;
+}
+
+fn reset_move(mut move_count: ResMut<MoveCount>) {
+    move_count.value = 0;
+}
+
+fn reset_life(mut life_count: ResMut<LifeCount>) {
+    life_count.value = 3;
 }
 
 /// Reads [`SwapMessage`]s from input systems and attempts each swap.
@@ -80,6 +118,9 @@ fn reset_score(mut score: ResMut<Score>) {
 fn process_swap(
     mut swap_messages: MessageReader<SwapMessage>,
     mut grid: ResMut<Grid>,
+    mut move_count: ResMut<MoveCount>,
+    mut life_count: ResMut<LifeCount>,
+    mut commands: Commands,
     mut audio: MessageWriter<SoundEffect>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
@@ -94,9 +135,19 @@ fn process_swap(
             // components from Grid at the end of the logic step.
             grid.swap_cells(pa, pb);
             audio.write(SoundEffect::Invalid);
+
+            if let (Some(ea), Some(eb)) = (grid.entity_at(pa), grid.entity_at(pb)) {
+                commands.entity(ea).insert(Wiggling { elapsed: 0.0 });
+                commands.entity(eb).insert(Wiggling { elapsed: 0.0 });
+                life_count.value -= 1;
+                if life_count.value == 0 {
+                    next_state.set(GameState::GameOver);
+                }
+            }
         } else {
             audio.write(SoundEffect::Swap);
             next_state.set(GameState::Animating);
+            move_count.value += 1;
         }
     }
 }
@@ -140,12 +191,23 @@ fn process_cascade(
         }
     }
 
-    score.value = score
+    let value = score
         .value
         .saturating_add(matched.len() as u32 * POINTS_PER_CLEARED_GEM);
+    let value = points_for_clear(value);
+    score.value = value;
     audio.write(SoundEffect::Match);
 
     apply_gravity_and_refill(&mut grid, &mut commands);
+}
+
+fn points_for_clear(value: u32) -> u32 {
+    match value {
+        0..=3 => value,
+        4..=6 => value + 2,
+        7..=9 => value + 5,
+        _ => value + 10,
+    }
 }
 
 /// Compacts surviving gems toward the bottom of each column and fills the

@@ -187,3 +187,7 @@ Some directions to explore once you're comfortable with the codebase.
 - **[Particle effects](workshop/advanced/4-particle-effects.md):** spawn short-lived particle entities when gems are cleared.
 - **[Hint system](workshop/advanced/5-hint-system.md):** after a few seconds of inactivity, highlight a valid move.
 - **[Game AI](workshop/advanced/6-game-ai.md):** add a mode where the game makes matches automatically.
+
+## Current Result after Workshop
+
+![current_state.png](workshop/current_state.png)

@@ -294,8 +294,16 @@ impl Plugin for BoardPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Grid::empty())
             .add_systems(Startup, setup_camera)
-            .add_systems(OnEnter(ScreenState::InGame), setup_board);
+            .add_systems(OnEnter(ScreenState::InGame), (spawn_background, setup_board));
     }
+}
+
+fn spawn_background(mut commands: Commands, asset_server: Res<AssetServer>) {
+    commands.spawn((
+        Sprite::from_image(asset_server.load("images/background.png")),
+        Transform::from_translation(Vec3::new(0.0, 0.0, -1.0)),
+        DespawnOnExit(ScreenState::InGame),
+    ));
 }
 
 fn setup_camera(mut commands: Commands) {

@@ -35,20 +35,22 @@ pub enum GemType {
     Blue,
     Green,
     Yellow,
-    Purple,
+//    Purple,
     Orange,
-    Pink,
+//    Pink,
+//    Lime,
 }
 
 impl GemType {
-    pub const ALL: [GemType; 7] = [
+    pub const ALL: [GemType; 5] = [
         GemType::Red,
         GemType::Blue,
         GemType::Green,
         GemType::Yellow,
-        GemType::Purple,
+//        GemType::Purple,
         GemType::Orange,
-        GemType::Pink,
+//        GemType::Pink,
+//        GemType::Lime,
     ];
 
     pub fn color(self) -> Color {
@@ -57,9 +59,10 @@ impl GemType {
             GemType::Blue => Color::hsl(224.0, 0.72, 0.56),
             GemType::Green => Color::hsl(133.0, 0.63, 0.45),
             GemType::Yellow => Color::hsl(54.0, 0.78, 0.54),
-            GemType::Purple => Color::hsl(276.0, 0.72, 0.56),
+            //GemType::Purple => Color::hsl(276.0, 0.72, 0.56),
             GemType::Orange => Color::hsl(27.0, 0.90, 0.52),
-            GemType::Pink => Color::hsl(348.0, 0.82, 0.68),
+            //GemType::Pink => Color::hsl(348.0, 0.82, 0.68),
+            //GemType::Lime => Color::hsl(90.0, 0.72, 0.56),
         }
     }
 
@@ -109,6 +112,11 @@ impl GemType {
     }
 }
 
+#[derive(Component)]
+pub struct Wiggling {
+    pub elapsed: f32,
+}
+
 /// Exponential-decay rate for [`smooth_nudge`](StableInterpolate::smooth_nudge).
 const FALL_DECAY_RATE: f32 = 12.0;
 const FALL_SNAP_THRESHOLD: f32 = 0.05;
@@ -134,6 +142,7 @@ impl Plugin for GemsPlugin {
             (
                 snap_new_gem_transforms,
                 animate_falling_gems.run_if(in_state(ScreenState::InGame)),
+                animate_wiggling_gems.run_if(in_state(ScreenState::InGame)),
                 sync_gem_colors,
             )
                 .in_set(GameSystems::AudioVisual),
@@ -170,6 +179,33 @@ fn animate_falling_gems(
             transform.translation = target;
             commands.entity(entity).remove::<Falling>();
         }
+    }
+}
+
+const WIGGLE_FREQ: f32 = 35.0;       // radians per second
+const WIGGLE_AMPLITUDE: f32 = 6.0;   // pixels
+const WIGGLE_DURATION: f32 = 0.35;   // seconds
+
+fn animate_wiggling_gems(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut query: Query<(Entity, &GridPos, &mut Wiggling, &mut Transform)>,
+) {
+    for (entity, pos, mut wiggle, mut transform) in &mut query {
+        wiggle.elapsed += time.delta_secs();
+        let target = pos.to_world();
+
+        if wiggle.elapsed >= WIGGLE_DURATION {
+            transform.translation = target;
+            commands.entity(entity).remove::<Wiggling>();
+            continue;
+        }
+
+        // Damping factor falls to 0 at the end so the wiggle dies out.
+        let damping = 1.0 - wiggle.elapsed / WIGGLE_DURATION;
+        let dx = (wiggle.elapsed * WIGGLE_FREQ).sin() * WIGGLE_AMPLITUDE * damping;
+        transform.translation.x = target.x + dx;
+        transform.translation.y = target.y;
     }
 }
 
